@@ -117,7 +117,7 @@ function createVaultController(db) {
             let decrypted = decipher.update(encryptedData);
             decrypted = Buffer.concat([decrypted, decipher.final()]);
             
-            const dataUri = \`data:\${doc.mimeType};base64,\${decrypted.toString('base64')}\`;
+            const dataUri = `data:${doc.mimeType};base64,${decrypted.toString('base64')}`;
 
             return res.json({
                 id: doc._id.toString(),

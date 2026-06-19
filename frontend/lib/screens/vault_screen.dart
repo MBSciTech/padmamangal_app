@@ -75,7 +75,7 @@ class _VaultScreenState extends State<VaultScreen> {
       if (mounted) {
         Navigator.of(context).pop(); // dismiss dialog
         // Just trigger standard download/open logic used in chat
-        await downloadOrOpenFile(downloadedFile);
+        downloadOrOpenFile(downloadedFile);
       }
     } catch (e) {
       if (mounted) {
@@ -229,7 +229,7 @@ class _VaultScreenState extends State<VaultScreen> {
                         title: Text(doc.name, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                         subtitle: Padding(
                           padding: const EdgeInsets.only(top: 4),
-                          child: Text('\${_formatSize(doc.size)} • \${DateFormat('MMM d, yyyy').format(doc.createdAt)}'),
+                          child: Text("\${_formatSize(doc.size)} • \${DateFormat('MMM d, yyyy').format(doc.createdAt)}"),
                         ),
                         trailing: PopupMenuButton<String>(
                           onSelected: (value) {

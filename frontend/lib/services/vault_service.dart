@@ -45,7 +45,7 @@ class VaultService {
     }
 
     final response = await http.get(
-      Uri.parse('\${ApiConfig.baseUrl}/api/vault'),
+      Uri.parse('${ApiConfig.baseUrl}/api/vault'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
@@ -69,7 +69,7 @@ class VaultService {
     }
 
     final response = await http.post(
-      Uri.parse('\${ApiConfig.baseUrl}/api/vault'),
+      Uri.parse('${ApiConfig.baseUrl}/api/vault'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
@@ -94,7 +94,7 @@ class VaultService {
     }
 
     final response = await http.get(
-      Uri.parse('\${ApiConfig.baseUrl}/api/vault/$id/download'),
+      Uri.parse('${ApiConfig.baseUrl}/api/vault/$id/download'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
@@ -118,7 +118,7 @@ class VaultService {
     }
 
     final response = await http.delete(
-      Uri.parse('\${ApiConfig.baseUrl}/api/vault/$id'),
+      Uri.parse('${ApiConfig.baseUrl}/api/vault/$id'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
