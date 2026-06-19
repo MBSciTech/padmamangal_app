@@ -8,8 +8,8 @@ function createAuthController(db) {
     const users = db.collection("users");
 
     async function ensureIndexes() {
-        await users.createIndex({ username: 1 }, { unique: true, sparse: true });
-        await users.createIndex({ phoneNumber: 1 }, { unique: true, sparse: true });
+        await users.createIndex({ username: 1 }, { unique: true });
+        await users.createIndex({ phoneNumber: 1 }, { unique: true });
     }
 
     async function signup(req, res) {
