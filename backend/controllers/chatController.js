@@ -1,45 +1,19 @@
 const { ObjectId } = require("mongodb");
 
-function createChatController(db) {
+function createChatController(db, io) {
     const messages = db.collection("messages");
     const users    = db.collection("users");
-
-    // ── Server-side in-memory cache ────────────────────────────────────────
-    // Polling happens every 5 s from each client; without a cache every poll
-    // is a full MongoDB Atlas round-trip. With a 2 s TTL we cut Atlas queries
-    // by ~60-70% and dramatically reduce latency for concurrent users.
-    let _cachedMessages  = null;
-    let _cachedUserPics  = null;
-    let _cacheTimestamp  = 0;
-    const CACHE_TTL_MS   = 5000; // 2 s — fresh enough for a chat app
-
-    function _isCacheValid() {
-        return _cachedMessages !== null && (Date.now() - _cacheTimestamp) < CACHE_TTL_MS;
-    }
-
-    function _invalidateCache() {
-        _cachedMessages = null;
-        _cachedUserPics = null;
-        _cacheTimestamp = 0;
-    }
 
     // ── GET /api/messages ──────────────────────────────────────────────────
     async function getMessages(req, res) {
         try {
-            if (_isCacheValid()) {
-                return res.json(_cachedMessages);
-            }
-
-            // Fetch user pic map (also cached)
-            if (!_cachedUserPics) {
-                const allUsers = await users
-                    .find({}, { projection: { profilePic: 1 } })
-                    .toArray();
-                _cachedUserPics = {};
-                allUsers.forEach(u => {
-                    _cachedUserPics[u._id.toString()] = u.profilePic || null;
-                });
-            }
+            const allUsers = await users
+                .find({}, { projection: { profilePic: 1 } })
+                .toArray();
+            const userPics = {};
+            allUsers.forEach(u => {
+                userPics[u._id.toString()] = u.profilePic || null;
+            });
 
             const chatList = await messages
                 .find({})
@@ -47,14 +21,13 @@ function createChatController(db) {
                 .limit(100)
                 .toArray();
 
-            _cachedMessages = chatList.map(msg => ({
+            const populatedMessages = chatList.map(msg => ({
                 ...msg,
-                senderProfilePic: _cachedUserPics[msg.senderId] || null,
+                senderProfilePic: userPics[msg.senderId] || null,
                 reactions:        msg.reactions || [],
             }));
-            _cacheTimestamp = Date.now();
 
-            return res.json(_cachedMessages);
+            return res.json(populatedMessages);
         } catch (error) {
             console.error("Get messages error:", error.message);
             return res.status(500).json({ message: "Server error fetching messages." });
@@ -102,10 +75,10 @@ function createChatController(db) {
 
             const result = await messages.insertOne(newMessage);
 
-            // Invalidate cache so next poll fetches the new message
-            _invalidateCache();
+            const insertedMessage = { _id: result.insertedId, ...newMessage, senderProfilePic: user.profilePic || null };
+            io.emit("new_message", insertedMessage);
 
-            return res.status(201).json({ _id: result.insertedId, ...newMessage });
+            return res.status(201).json(insertedMessage);
         } catch (error) {
             console.error("Send message error:", error.message);
             return res.status(500).json({ message: "Server error sending message." });
@@ -144,7 +117,7 @@ function createChatController(db) {
                 { $set: { reactions } }
             );
 
-            _invalidateCache(); // reactions changed — next poll will reflect it
+            io.emit("reaction_updated", { messageId, reactions });
 
             return res.json({ message: "Reaction updated successfully.", reactions });
         } catch (error) {
@@ -184,7 +157,15 @@ function createChatController(db) {
                 { $set: { "location.latitude": Number(latitude), "location.longitude": Number(longitude) } }
             );
 
-            _invalidateCache(); // location changed
+            io.emit("location_updated", { 
+                messageId, 
+                location: { 
+                    latitude: Number(latitude), 
+                    longitude: Number(longitude), 
+                    isLive: true,
+                    liveExpiresAt: msg.location.liveExpiresAt
+                } 
+            });
 
             return res.json({ message: "Location updated successfully." });
         } catch (error) {

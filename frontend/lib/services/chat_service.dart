@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../config/api_config.dart';
 import 'auth_service.dart';
 
@@ -123,6 +125,60 @@ class ChatMessage {
 
 class ChatService {
   final AuthService _authService = AuthService();
+  IO.Socket? _socket;
+
+  final _messageStreamController = StreamController<ChatMessage>.broadcast();
+  final _reactionStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _locationStreamController = StreamController<Map<String, dynamic>>.broadcast();
+
+  Stream<ChatMessage> get onNewMessage => _messageStreamController.stream;
+  Stream<Map<String, dynamic>> get onReactionUpdated => _reactionStreamController.stream;
+  Stream<Map<String, dynamic>> get onLocationUpdated => _locationStreamController.stream;
+
+  Future<void> connectSocket() async {
+    if (_socket != null && _socket!.connected) return;
+
+    final token = await _authService.getToken();
+    if (token == null) return;
+
+    _socket = IO.io(ApiConfig.baseUrl, IO.OptionBuilder()
+        .setTransports(['websocket'])
+        .setAuth({'token': token})
+        .build());
+
+    _socket!.onConnect((_) {
+      print('Socket connected');
+    });
+
+    _socket!.on('new_message', (data) {
+      if (data != null) {
+        try {
+          final message = ChatMessage.fromJson(data);
+          _messageStreamController.add(message);
+        } catch (e) {
+          print('Error parsing new_message: $e');
+        }
+      }
+    });
+
+    _socket!.on('reaction_updated', (data) {
+      if (data != null) {
+        _reactionStreamController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    _socket!.on('location_updated', (data) {
+      if (data != null) {
+        _locationStreamController.add(Map<String, dynamic>.from(data));
+      }
+    });
+  }
+
+  void disconnectSocket() {
+    _socket?.disconnect();
+    _socket?.dispose();
+    _socket = null;
+  }
 
   Future<List<ChatMessage>> fetchMessages() async {
     final token = await _authService.getToken();

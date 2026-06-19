@@ -13,7 +13,40 @@ const { createNoticeRoutes }     = require("./routes/noticeRoutes");
 const { createEventController }  = require("./controllers/eventController");
 const { createEventRoutes }      = require("./routes/eventRoutes");
 
+const http = require("http");
+const { Server } = require("socket.io");
+const jwt = require("jsonwebtoken");
+
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-in-production";
+
 const app  = express();
+const httpServer = http.createServer(app);
+const io = new Server(httpServer, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    }
+});
+
+// Socket.IO authentication middleware
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    if (!token) {
+        return next(new Error("Authentication error"));
+    }
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) return next(new Error("Authentication error"));
+        socket.userId = decoded.userId;
+        next();
+    });
+});
+
+io.on("connection", (socket) => {
+    console.log(`🔌 Socket connected: ${socket.id} (User: ${socket.userId})`);
+    socket.on("disconnect", () => {
+        console.log(`🔌 Socket disconnected: ${socket.id}`);
+    });
+});
 const PORT = 3000;
 
 const client = new MongoClient(process.env.MONGO_DB_URI, {
@@ -59,7 +92,7 @@ async function startServer() {
 
         const authController   = createAuthController(db);
         await authController.ensureIndexes();
-        const chatController   = createChatController(db);
+        const chatController   = createChatController(db, io);
         const userController   = createUserController(db);
         const noticeController = createNoticeController(db);
         const eventController  = createEventController(db);
@@ -72,7 +105,7 @@ async function startServer() {
         app.use("/api/notices", createNoticeRoutes(noticeController));
         app.use("/api/events",  createEventRoutes(eventController));
 
-        app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+        httpServer.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
     } catch (error) {
         console.error("❌ Error:", error);
     }

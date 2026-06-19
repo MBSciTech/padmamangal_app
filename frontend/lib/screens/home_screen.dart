@@ -82,12 +82,93 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   bool get _hasText => _messageController.text.trim().isNotEmpty;
 
+  StreamSubscription? _newMessageSub;
+  StreamSubscription? _reactionSub;
+  StreamSubscription? _locationSub;
+
   @override
   void initState() {
     super.initState();
     _loadUserAndMessages();
-    // Poll every 5 s — server has a 2 s cache, so going faster wastes bandwidth.
-    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) => _pollMessages());
+    
+    _chatService.connectSocket();
+    
+    _newMessageSub = _chatService.onNewMessage.listen((message) {
+      if (!mounted) return;
+      
+      final isNewFromOther = message.senderId != _currentUserId && !_messages.any((m) => m.id == message.id);
+      
+      if (isNewFromOther) {
+        NotificationService.instance.showMessageNotification(
+          senderName: message.senderName,
+          messagePreview: message.message.isNotEmpty
+              ? message.message
+              : message.file != null
+                  ? '📎 Sent an attachment'
+                  : '',
+        );
+      }
+      
+      setState(() {
+        final idx = _messages.indexWhere((m) => m.id == message.id);
+        if (idx > -1) {
+          _messages[idx] = message;
+        } else {
+          _messages.add(message);
+        }
+      });
+      _scrollToBottom(animated: true);
+    });
+
+    _reactionSub = _chatService.onReactionUpdated.listen((data) {
+      if (!mounted) return;
+      final messageId = data['messageId'];
+      final reactionsList = data['reactions'] as List<dynamic>? ?? [];
+      final parsedReactions = reactionsList.map((r) => MessageReaction.fromJson(r as Map<String, dynamic>)).toList();
+      
+      setState(() {
+        final idx = _messages.indexWhere((m) => m.id == messageId);
+        if (idx > -1) {
+          final old = _messages[idx];
+          _messages[idx] = ChatMessage(
+            id: old.id,
+            senderId: old.senderId,
+            senderName: old.senderName,
+            message: old.message,
+            createdAt: old.createdAt,
+            senderProfilePic: old.senderProfilePic,
+            file: old.file,
+            location: old.location,
+            reactions: parsedReactions,
+          );
+        }
+      });
+    });
+
+    _locationSub = _chatService.onLocationUpdated.listen((data) {
+      if (!mounted) return;
+      final messageId = data['messageId'];
+      final locData = data['location'];
+      
+      setState(() {
+        final idx = _messages.indexWhere((m) => m.id == messageId);
+        if (idx > -1) {
+          final old = _messages[idx];
+          _messages[idx] = ChatMessage(
+            id: old.id,
+            senderId: old.senderId,
+            senderName: old.senderName,
+            message: old.message,
+            createdAt: old.createdAt,
+            senderProfilePic: old.senderProfilePic,
+            file: old.file,
+            location: ChatLocation.fromJson(locData as Map<String, dynamic>),
+            reactions: old.reactions,
+          );
+        }
+      });
+    });
+
     // Live Location updates sync every 20 seconds
     _liveLocationTimer = Timer.periodic(const Duration(seconds: 20), (_) => _updateMyLiveLocations());
 
@@ -118,7 +199,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _pollingTimer?.cancel();
+    _newMessageSub?.cancel();
+    _reactionSub?.cancel();
+    _locationSub?.cancel();
+    _chatService.disconnectSocket();
+    
     _recordTimer?.cancel();
     _liveLocationTimer?.cancel();
     _navBarTimer?.cancel();
@@ -596,50 +681,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _pollMessages() async {
-    try {
-      final messages = await _chatService.fetchMessages();
-      if (!mounted) return;
 
-      final hasNew = messages.length != _messages.length ||
-          (messages.isNotEmpty && _messages.isNotEmpty && messages.last.id != _messages.last.id);
-
-      if (hasNew) {
-        // Find messages that are genuinely new and not sent by current user
-        final knownIds = _messages.map((m) => m.id).toSet();
-        final newFromOthers = messages
-            .where((m) => !knownIds.contains(m.id) && m.senderId != _currentUserId)
-            .toList();
-
-        if (newFromOthers.isNotEmpty) {
-          final latest = newFromOthers.last;
-          await NotificationService.instance.showMessageNotification(
-            senderName: latest.senderName,
-            messagePreview: latest.message.isNotEmpty
-                ? latest.message
-                : latest.file != null
-                    ? '📎 Sent an attachment'
-                    : '',
-          );
-        }
-
-        setState(() {
-          _messages = messages;
-        });
-        _scrollToBottom(animated: true);
-      }
-    } catch (e) {
-      // Network errors (e.g. backend restarting) are expected — don't log.
-      // Only surface unexpected error types.
-      assert(() {
-        final msg = e.toString();
-        if (!msg.contains('Failed to fetch') && !msg.contains('ClientException')) {
-          debugPrint('Polling error: $e');
-        }
-        return true;
-      }());
-    }
-  }
 
   void _scrollToBottom({bool animated = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
