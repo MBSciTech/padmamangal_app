@@ -20,6 +20,7 @@ import 'profile_screen.dart';
 import 'notice_board_screen.dart';
 import 'events_screen.dart';
 import 'settings_screen.dart';
+import 'vault_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -1295,6 +1296,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   onTap: () {
                     Navigator.pop(context);
                     _navigateTo(const SettingsScreen());
+                  },
+                ),
+                const SizedBox(height: 4),
+                _DrawerNavItem(
+                  icon: Icons.shield_rounded,
+                  label: 'Document Vault',
+                  color: Colors.greenAccent.shade700,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _navigateTo(const VaultScreen());
                   },
                 ),
                 const Divider(height: 28, indent: 12, endIndent: 12),

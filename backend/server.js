@@ -12,6 +12,8 @@ const { createNoticeController } = require("./controllers/noticeController");
 const { createNoticeRoutes }     = require("./routes/noticeRoutes");
 const { createEventController }  = require("./controllers/eventController");
 const { createEventRoutes }      = require("./routes/eventRoutes");
+const { createVaultController }  = require("./controllers/vaultController");
+const { createVaultRoutes }      = require("./routes/vaultRoutes");
 
 const http = require("http");
 const { Server } = require("socket.io");
@@ -96,6 +98,7 @@ async function startServer() {
         const userController   = createUserController(db);
         const noticeController = createNoticeController(db);
         const eventController  = createEventController(db);
+        const vaultController  = createVaultController(db);
 
         app.get("/", (req, res) => res.send("Backend is running!"));
 
@@ -104,6 +107,7 @@ async function startServer() {
         app.use("/api/users",   createUserRoutes(userController));
         app.use("/api/notices", createNoticeRoutes(noticeController));
         app.use("/api/events",  createEventRoutes(eventController));
+        app.use("/api/vault",   createVaultRoutes(vaultController));
 
         httpServer.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
     } catch (error) {
