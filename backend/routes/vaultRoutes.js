@@ -1,11 +1,11 @@
 const express = require("express");
-const { verifyToken } = require("../middleware/auth");
+const { authMiddleware } = require("../middleware/auth");
 
 function createVaultRoutes(vaultController) {
     const router = express.Router();
 
     // All vault routes require authentication
-    router.use(verifyToken);
+    router.use(authMiddleware);
 
     router.get("/", vaultController.getDocuments);
     router.post("/", vaultController.uploadDocument);
